@@ -1,104 +1,244 @@
-import sys
 import os
-import pypdf
 from PySide6.QtWidgets import (
-    QApplication,
     QWidget,
     QVBoxLayout,
     QPushButton,
     QFileDialog,
     QListWidget,
     QMessageBox,
-    QToolBox,
+    QToolButton,
     QHBoxLayout,
-    QLabel
+    QLabel,
+    QListWidgetItem
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Signal, QTimer
+import traceback
+from funcoes import mesclar_pdfs
 
-pdfs_selecionados = []
+class JanelaPrincipal(QWidget):
+    def __init__(self):
+        super().__init__()
 
-app = QApplication(sys.argv)
+        self.pdfs_selecionados = []
 
-janela = QWidget()
-janela.setWindowTitle("Mesclar PDFs")
-janela.resize(800, 500)
+        self.setWindowTitle("Mesclar PDFs")
+        self.resize(800, 500)
 
-layout = QVBoxLayout()
+        layout = QVBoxLayout()
 
-botao_add = QPushButton("Selecionar Arquivos")
-botao_remover = QPushButton("Remover Arquivo")
-botao_mesclar = QPushButton("Mesclar PDFs")
-lista_pdfs = QListWidget()
+        self.botao_add = QPushButton("Selecionar Arquivos")
+        self.botao_mesclar = QPushButton("Mesclar PDFs")
+        self.lista_pdfs = QListWidget()
 
-layout.addWidget(botao_add)
-layout.addWidget(botao_remover)
-layout.addWidget(lista_pdfs)
-layout.addWidget(botao_mesclar)
-janela.setLayout(layout)
+        layout.addWidget(self.botao_add)
+        layout.addWidget(self.lista_pdfs)
+        layout.addWidget(self.botao_mesclar)
 
-def adicionar_pdfs():
-    arquivos, _ = QFileDialog.getOpenFileNames(
-        janela,
-        "selecionar arquivos",
-        os.path.expanduser("~"),
-        "Arquivo PDF (*.pdf)"
-    )
+        self.setLayout(layout)
 
-    for arquivo in arquivos:
-        if arquivo not in pdfs_selecionados:
-            pdfs_selecionados.append(arquivo)
-            lista_pdfs.addItem(os.path.basename(arquivo))
+        # Conecta o botão ao método
+        self.botao_add.clicked.connect(self.adicionar_pdfs)
+        self.botao_mesclar.clicked.connect(self.mesclar_pdf)
 
-def remover_pdf():
-    arquivo_selecionado = lista_pdfs.currentRow()
-    if arquivo_selecionado != -1:
-        lista_pdfs.takeItem(arquivo_selecionado)
-        del pdfs_selecionados[arquivo_selecionado]
-
-def mesclar_pdf():
-    if not pdfs_selecionados:
-        QMessageBox.warning(
-            janela,
-            "Atenção",
-            "Selecione pelo menos um PDF"
+    def adicionar_pdfs(self):
+        arquivos, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Selecionar arquivos",
+            os.path.expanduser("~"),
+            "Arquivo PDF (*.pdf)"
         )
-        return
 
-    caminho_sainda, _ = QFileDialog.getSaveFileName(
-        janela,
-        "Salvar PDF mesclado",
-        "PDFMesclado.pdf",
-        "arquivo PDF (*.pdf)"
-    )
+        for arquivo in arquivos:
+            if arquivo not in self.pdfs_selecionados:
+                self.pdfs_selecionados.append(arquivo)
 
-    try:
-        if not caminho_sainda:
+                nome_arquivo = os.path.basename(arquivo)
+
+                item = QListWidgetItem()
+                widget = ItemPDF(nome_arquivo)
+
+                item.setSizeHint(widget.sizeHint())
+
+                self.lista_pdfs.addItem(item)
+                self.lista_pdfs.setItemWidget(item, widget)
+
+                widget.remover_solicitacao.connect(
+                    lambda widget=widget: self.remover_pdf(widget)
+                )
+
+                widget.subir_solicitacao.connect(
+                    lambda widget=widget: self.testar_subir_pdf(widget)
+                )
+
+                widget.descer_solicitacao.connect(
+                    lambda widget=widget: self.testar_descer_pdf(widget)
+                )
+
+    def remover_pdf(self, widget):
+        for i in range(self.lista_pdfs.count()):
+            item = self.lista_pdfs.item(i)
+
+            if self.lista_pdfs.itemWidget(item) == widget:
+                self.lista_pdfs.takeItem(i)
+                del self.pdfs_selecionados[i]
+                break
+    def subir_pdf(self, widget):
+        for i in range(self.lista_pdfs.count()):
+            item = self.lista_pdfs.item(i)
+
+            if self.lista_pdfs.itemWidget(item) == widget:
+                if i == 0:
+                    return
+
+                self.pdfs_selecionados[i - 1], self.pdfs_selecionados[i] = (
+                    self.pdfs_selecionados[i],
+                    self.pdfs_selecionados[i - 1]
+                )
+
+                QTimer.singleShot(0, self.atualizar_lista)
+                return
+            
+    def testar_subir_pdf(self, widget):
+        try:
+            self.subir_pdf(widget)
+        except Exception:
+            traceback.print_exc()
+
+    def descer_pdf(self, widget):
+        for i in range(self.lista_pdfs.count()):
+            item = self.lista_pdfs.item(i)
+
+            if self.lista_pdfs.itemWidget(item) == widget:
+                if i == self.lista_pdfs.count() - 1:
+                    return
+
+                self.pdfs_selecionados[i], self.pdfs_selecionados[i + 1] = (
+                    self.pdfs_selecionados[i + 1],
+                    self.pdfs_selecionados[i]
+                )
+
+                QTimer.singleShot(0, self.atualizar_lista)
+                return
+            
+    def testar_descer_pdf(self, widget):
+        try:
+            self.descer_pdf(widget)
+        except Exception:
+            traceback.print_exc()
+
+    def atualizar_lista(self):
+        self.lista_pdfs.clear()
+
+        for arquivo in self.pdfs_selecionados:
+            nome_arquivo = os.path.basename(arquivo)
+
+            item = QListWidgetItem()
+            widget = ItemPDF(nome_arquivo)
+
+            item.setSizeHint(widget.sizeHint())
+
+            self.lista_pdfs.addItem(item)
+            self.lista_pdfs.setItemWidget(item, widget)
+
+            widget.remover_solicitacao.connect(
+                lambda widget=widget: self.remover_pdf(widget)
+            )
+
+            widget.subir_solicitacao.connect(
+                lambda widget=widget: self.testar_subir_pdf(widget)
+            )
+
+            widget.descer_solicitacao.connect(
+                lambda widget=widget: self.testar_descer_pdf(widget)
+            )
+
+    
+    def mesclar_pdf(self):
+        if not self.pdfs_selecionados:
+            QMessageBox.warning(
+                self,
+                "Atenção",
+                "Selecione pelo menos um PDF"
+            )
             return
 
-        pdf_mesclados = pypdf.PdfWriter()
-        for pdf in pdfs_selecionados:
-            pdf_mesclados.append(pdf)
-
-        pdf_mesclados.write(caminho_sainda)
-
-        lista_pdfs.clear()
-        pdfs_selecionados.clear()
-
-        QMessageBox.information(
-            janela,
-            "Sucesso",
-            "Os PDFs foram mesclados com Sucesso!"
-        )
-    except Exception as erro:
-        QMessageBox.critical(
-            janela,
-            "Erro"
-            f"Não foi possivel mesclar os PDFs.\n\nDetalhes: {erro}"
+        caminho_saida, _ = QFileDialog.getSaveFileName(
+            self,
+            "Salvar PDF mesclado",
+            "PDFMesclado.pdf",
+            "Arquivo PDF (*.pdf)"
         )
 
-botao_add.clicked.connect(adicionar_pdfs)
-botao_remover.clicked.connect(remover_pdf)
-botao_mesclar.clicked.connect(mesclar_pdf)
+        if not caminho_saida:
+            return
 
-janela.show()
-sys.exit(app.exec())
+        try:
+            mesclar_pdfs(self.pdfs_selecionados, caminho_saida)
+
+            self.lista_pdfs.clear()
+            self.pdfs_selecionados.clear()
+
+            QMessageBox.information(
+                self,
+                "Sucesso",
+                "Os PDFs foram mesclados com sucesso!"
+            )
+
+        except Exception as erro:
+            QMessageBox.critical(
+                self,
+                "Erro",
+                f"Não foi possível mesclar os PDFs.\n\nDetalhes: {erro}"
+            )
+
+class ItemPDF(QWidget):
+    remover_solicitacao = Signal()
+    subir_solicitacao = Signal()
+    descer_solicitacao = Signal()
+
+    def __init__(self, nome_arquivo):
+        super().__init__()
+
+        self.layout = QHBoxLayout(self)
+
+        self.nome = QLabel(nome_arquivo)
+
+        self.botao_subir = QToolButton()
+        self.botao_subir.setText("↑")
+        self.botao_subir.clicked.connect(
+            self.subir_solicitacao.emit
+        )
+
+        self.botao_descer = QToolButton()
+        self.botao_descer.setText("↓")
+        self.botao_descer.clicked.connect(
+            self.descer_solicitacao.emit
+        )
+
+        self.botao_remover = QToolButton()
+        self.botao_remover.setText("×")
+        self.botao_remover.clicked.connect(
+            self.remover_solicitacao.emit
+        )
+
+        self.botao_subir.hide()
+        self.botao_descer.hide()
+        self.botao_remover.hide()
+
+        self.layout.addWidget(self.nome)
+        self.layout.addStretch()
+        self.layout.addWidget(self.botao_subir)
+        self.layout.addWidget(self.botao_descer)
+        self.layout.addWidget(self.botao_remover)
+
+    def enterEvent(self, event):
+        self.botao_subir.show()
+        self.botao_descer.show()
+        self.botao_remover.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.botao_subir.hide()
+        self.botao_descer.hide()
+        self.botao_remover.hide()        
+        super().leaveEvent(event)

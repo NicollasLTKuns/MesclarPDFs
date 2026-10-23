@@ -1,19 +1,17 @@
-import os
-import pypdf
+import sys
+from pathlib import Path
 
-pdfs_selecionado = []
+from PySide6.QtWidgets import QApplication
+from interface import JanelaPrincipal
 
-pdfs_mesclados = pypdf.PdfWriter()
+app = QApplication(sys.argv)
 
-for pdf in pdfs_selecionado:
-    pdfs_mesclados.append(pdf)
+caminho_estilo = Path(__file__).with_name("style.qss")
 
-pasta = "./NovosPDFs"
+with open(caminho_estilo, "r", encoding="utf-8") as arquivo:
+    app.setStyleSheet(arquivo.read())
 
-if not os.path.exists(pasta):
-    os.makedirs(pasta)
+janela = JanelaPrincipal()
+janela.show()
 
-
-saida = os.path.join(pasta, "resultado.pdf")
-
-pdfs_mesclados.write(saida)
+sys.exit(app.exec())
