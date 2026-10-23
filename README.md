@@ -35,7 +35,7 @@ git clone https://github.com/NicollasLTKuns/MesclarPDFs.git
 ### 2. Entre na pasta do projeto
 
 ```bash
-cd mesclador-pdf
+cd MesclarPDFs
 ```
 
 ### 3. Crie um ambiente virtual
